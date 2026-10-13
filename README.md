@@ -1,1 +1,93 @@
+<div align="center">
 
+<img src="src/app/icon.svg" width="64" height="64" alt="" />
+
+# Nepal Law AI
+
+**Ask anything about Nepali law — and get a plain-language answer that cites the exact section.**
+
+[nepallawai.yamrajkhadka.com.np](https://nepallawai.yamrajkhadka.com.np)
+
+</div>
+
+Nepal Law AI answers legal questions using a retrieval-augmented, fine-tuned language model that searches 5,800+ provisions of the Constitution of Nepal (2015), the National Civil Code (2017) and the National Penal Code (2017). Every answer opens with the Act, chapter and section it relies on, rendered as a citation card above the explanation.
+
+## Features
+
+- **Cited answers** — the model's `According to Law: …, Chapter: …, Section: …` preamble is parsed into a citation card, live, while the answer streams.
+- **Readable output** — numbered lists the model writes inline are reflowed into real lists; Markdown is rendered; answers that hit the engine's length limit are flagged.
+- **Honest waiting** — the engine runs on a free CPU Space, so a fresh answer can take a minute or two. The UI shows real progress (connect → research → write) with an elapsed timer, smooths the token stream into steady typing, and keeps generating while you switch conversations.
+- **Research history** — Google sign-in via Supabase; conversations are saved, grouped by date, searchable, renameable and deletable, and synced across tabs with Supabase Realtime.
+- **Polish** — light/dark/system themes with no flash, keyboard shortcuts, mobile drawer, stick-to-bottom scrolling, stop and retry, cached "instant" answers, accessible markup, OG image, PWA manifest and JSON-LD.
+
+| Shortcut | Action |
+| --- | --- |
+| <kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd> | Send / new line |
+| <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> | New chat |
+| <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>B</kbd> | Toggle sidebar |
+| <kbd>/</kbd> | Focus the composer |
+
+## Stack
+
+Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS 4 · shadcn/ui on Radix · Supabase (Auth, Postgres, Realtime) · react-markdown · Sonner. The legal engine is a FastAPI app on Hugging Face Spaces serving a GGUF model with RAG over WebSockets.
+
+## Getting started
+
+```bash
+npm install
+cp .env.example .env.local   # add your Supabase URL and anon key
+npm run dev
+```
+
+Then open http://localhost:3000.
+
+**Supabase setup**
+
+1. Create the tables and row-level security policies with [`supabase/schema.sql`](supabase/schema.sql).
+2. Enable the Google provider under *Authentication → Providers*.
+3. Under *Authentication → URL Configuration*, add `http://localhost:3000/chat/new` and `https://<your-domain>/chat/new` to the redirect URLs — Google sign-in returns there.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon key |
+| `NEXT_PUBLIC_ENGINE_URL` | no | Legal engine WebSocket (defaults to the Hugging Face Space) |
+| `NEXT_PUBLIC_SITE_URL` | no | Canonical URL for metadata, sitemap and OG image |
+| `NEXT_PUBLIC_GA_ID` | no | Google Analytics 4 measurement ID |
+
+## Scripts
+
+| Command | |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` / `npm start` | Production build / server |
+| `npm run lint` | ESLint (Next.js + React Compiler rules) |
+| `npm run typecheck` | Route types + TypeScript |
+
+## How it fits together
+
+```
+src/
+├─ app/                     routes: landing, /login, /signup, /chat/[id], metadata files
+├─ components/
+│  ├─ chat/                 shell, sidebar, chat view, composer, messages, citation card
+│  ├─ landing/              marketing page sections
+│  ├─ auth/                 sign-in screen
+│  └─ ui/                   shadcn/ui primitives
+├─ hooks/                   smooth text, stick-to-bottom, media queries, …
+└─ lib/
+   ├─ legal-engine.ts       WebSocket client: reconnects with backoff, queues, cancels, times out
+   ├─ chat-controller.ts    all chat state (auth, conversations, sessions) outside React
+   ├─ answer-format.ts      citation parsing and list reflow
+   └─ conversations.ts      Supabase queries
+```
+
+The chat UI lives in `app/chat/layout.tsx`, so it never remounts while you move between conversations; the URL only tells the controller which conversation to show. A new chat is a local draft until its first question is sent, at which point the conversation row is created, the draft is re-keyed to the new id and the URL is replaced.
+
+**Engine protocol** — the client sends `{ "question": "…" }` and receives `connection`, `processing`, `stream` (`partial` holds the full text so far), and finally `response` (`answer`, `sources`) or `error`. Messages carry no request id, so stopping an answer closes the socket and reconnects, which guarantees stale tokens never reach the next question.
+
+## Disclaimer
+
+Nepal Law AI provides general legal information, not legal advice. Answers are generated by AI and may be incomplete or wrong. Consult a licensed advocate for advice about your situation.
+
+Fonts in `src/assets/fonts` (used for the generated social image) are licensed under the SIL Open Font License.

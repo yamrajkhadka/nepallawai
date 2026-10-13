@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { redirect } from "next/navigation";
 
-export default function ChatRootPage() {
-  redirect('/chat/new');
+export default function ChatIndexPage() {
+  redirect("/chat/new");
 }

@@ -1,32 +1,11 @@
-import { MetadataRoute } from "next";
+import type { MetadataRoute } from "next";
+import { siteConfig } from "@/lib/site";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://nepallawai.yamrajkhadka.com.np";
-
+  const lastModified = new Date();
   return [
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 1,
-    },
-    {
-      url: `${baseUrl}/chat`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/login`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.3,
-    },
-    {
-      url: `${baseUrl}/signup`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.3,
-    },
+    { url: siteConfig.url, lastModified, changeFrequency: "weekly", priority: 1 },
+    { url: `${siteConfig.url}/signup`, lastModified, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${siteConfig.url}/login`, lastModified, changeFrequency: "monthly", priority: 0.3 },
   ];
 }
