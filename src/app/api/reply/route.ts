@@ -26,7 +26,8 @@ export async function POST(request: Request) {
         max_completion_tokens: 2048,
         stream: true,
       },
-      request.signal,
+      // Replies take seconds; don't leave the chat waiting on a stuck connection.
+      AbortSignal.any([request.signal, AbortSignal.timeout(60_000)]),
     );
   } catch (error) {
     console.error("Reply failed:", error);

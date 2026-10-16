@@ -402,17 +402,30 @@ export class ChatController {
     const onEvent = (event: EngineEvent) => this.handleEngineEvent(inflight, event);
     const history = this.historyBefore(messageId);
 
+    const askEngine = (text: string) => {
+      if (this.inflight === inflight) inflight.cancel = this.engine.ask(text, onEvent);
+    };
+
     // Read the message in context first: the engine answers anything, one question at a time.
+    // Groq is optional: if it's unavailable (no key, quota, outage), the engine answers on its own.
     understand(question, history, abort.signal)
-      .then(async ({ kind, question: standalone }) => {
+      .catch(() => null)
+      .then(async (understood) => {
         if (this.inflight !== inflight) return;
-        if (kind === "legal") {
-          inflight.cancel = this.engine.ask(standalone, onEvent);
-        } else if (kind === "chat") {
-          const text = await streamReply(question, history, abort.signal, (partial) =>
-            onEvent({ type: "token", text: partial, cached: false }),
-          );
-          onEvent({ type: "done", text, sources: [], cached: false });
+        if (!understood || understood.kind === "legal") {
+          askEngine(understood?.question ?? question);
+        } else if (understood.kind === "chat") {
+          let streamed = false;
+          try {
+            const text = await streamReply(question, history, abort.signal, (partial) => {
+              streamed = true;
+              onEvent({ type: "token", text: partial, cached: false });
+            });
+            onEvent({ type: "done", text, sources: [], cached: false });
+          } catch (error) {
+            if (streamed || this.inflight !== inflight) throw error;
+            askEngine(question);
+          }
         } else {
           onEvent({ type: "done", text: OFF_TOPIC_REPLY, sources: [], cached: false });
         }
