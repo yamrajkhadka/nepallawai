@@ -4,6 +4,7 @@ import { track } from "./analytics";
 import * as db from "./conversations";
 import { LegalEngine, type EngineEvent, type Source } from "./legal-engine";
 import { takeQuestion } from "./pending-question";
+import { isAboutNepaliLaw, OFF_TOPIC_REPLY } from "./question-check";
 import { getSupabase } from "./supabase";
 
 export const MAX_QUESTION_LENGTH = 2000;
@@ -395,9 +396,26 @@ export class ChatController {
     if (!key) return;
     this.set({ generating: { key, messageId } });
 
-    const inflight: Inflight = { messageId, conversationId, userSaved, cancel: () => {} };
+    const check = new AbortController();
+    const inflight: Inflight = { messageId, conversationId, userSaved, cancel: () => check.abort() };
     this.inflight = inflight;
-    inflight.cancel = this.engine.ask(question, (event) => this.handleEngineEvent(inflight, event));
+
+    // The engine answers anything, so only questions about Nepali law are sent to it.
+    isAboutNepaliLaw(question, check.signal).then(
+      (allowed) => {
+        if (this.inflight !== inflight) return;
+        if (allowed) {
+          inflight.cancel = this.engine.ask(question, (event) => this.handleEngineEvent(inflight, event));
+        } else {
+          this.handleEngineEvent(inflight, { type: "done", text: OFF_TOPIC_REPLY, sources: [], cached: false });
+        }
+      },
+      () =>
+        this.handleEngineEvent(inflight, {
+          type: "error",
+          message: "Your question couldn't be checked right now. Please try again.",
+        }),
+    );
   }
 
   private handleEngineEvent(inflight: Inflight, event: EngineEvent) {
