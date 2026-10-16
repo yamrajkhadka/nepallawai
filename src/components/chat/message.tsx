@@ -19,13 +19,14 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Cha
   return (
     <div
       className={cn(
-        "flex justify-end",
+        "flex flex-col items-end gap-1",
         message.live && "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
       )}
     >
       <p className="max-w-[min(85%,36rem)] rounded-xl rounded-br-lg bg-secondary px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap text-secondary-foreground [overflow-wrap:anywhere]">
         {message.content}
       </p>
+      <CopyButton text={message.content} label="Copy question" className="text-muted-foreground" />
     </div>
   );
 });
@@ -139,35 +140,10 @@ function ErrorNotice({ message, hasContent }: { message: ChatMessage; hasContent
 
 function MessageActions({ message }: { message: ChatMessage }) {
   const controller = useChatController();
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 1800);
-    return () => clearTimeout(timer);
-  }, [copied]);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(message.content);
-      setCopied(true);
-    } catch {
-      // Clipboard can be blocked (e.g. insecure context); nothing useful to do.
-    }
-  };
 
   return (
     <div className="mt-3 flex animate-in items-center gap-1 text-muted-foreground fade-in-0 duration-300">
-      {message.content && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" onClick={copy} aria-label={copied ? "Copied" : "Copy answer"}>
-              {copied ? <Check className="text-success" /> : <Copy />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{copied ? "Copied" : "Copy answer"}</TooltipContent>
-        </Tooltip>
-      )}
+      {message.content && <CopyButton text={message.content} label="Copy answer" />}
       {message.status === "stopped" && message.content && (
         <span className="mx-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">Stopped</span>
       )}
@@ -183,5 +159,35 @@ function MessageActions({ message }: { message: ChatMessage }) {
         </span>
       )}
     </div>
+  );
+}
+
+function CopyButton({ text, label, className }: { text: string; label: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      // Clipboard can be blocked (e.g. insecure context); nothing useful to do.
+    }
+  };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-sm" className={className} onClick={copy} aria-label={copied ? "Copied" : label}>
+          {copied ? <Check className="text-success" /> : <Copy />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{copied ? "Copied" : label}</TooltipContent>
+    </Tooltip>
   );
 }
