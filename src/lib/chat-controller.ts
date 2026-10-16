@@ -1,10 +1,10 @@
 import type { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { track } from "./analytics";
+import { HISTORY_TURNS, OFF_TOPIC_REPLY, streamReply, understand, type Turn } from "./assistant";
 import * as db from "./conversations";
 import { LegalEngine, type EngineEvent, type Source } from "./legal-engine";
 import { takeQuestion } from "./pending-question";
-import { isAboutNepaliLaw, OFF_TOPIC_REPLY } from "./question-check";
 import { getSupabase } from "./supabase";
 
 export const MAX_QUESTION_LENGTH = 2000;
@@ -396,26 +396,40 @@ export class ChatController {
     if (!key) return;
     this.set({ generating: { key, messageId } });
 
-    const check = new AbortController();
-    const inflight: Inflight = { messageId, conversationId, userSaved, cancel: () => check.abort() };
+    const abort = new AbortController();
+    const inflight: Inflight = { messageId, conversationId, userSaved, cancel: () => abort.abort() };
     this.inflight = inflight;
+    const onEvent = (event: EngineEvent) => this.handleEngineEvent(inflight, event);
+    const history = this.historyBefore(messageId);
 
-    // The engine answers anything, so only questions about Nepali law are sent to it.
-    isAboutNepaliLaw(question, check.signal).then(
-      (allowed) => {
+    // Read the message in context first: the engine answers anything, one question at a time.
+    understand(question, history, abort.signal)
+      .then(async ({ kind, question: standalone }) => {
         if (this.inflight !== inflight) return;
-        if (allowed) {
-          inflight.cancel = this.engine.ask(question, (event) => this.handleEngineEvent(inflight, event));
+        if (kind === "legal") {
+          inflight.cancel = this.engine.ask(standalone, onEvent);
+        } else if (kind === "chat") {
+          const text = await streamReply(question, history, abort.signal, (partial) =>
+            onEvent({ type: "token", text: partial, cached: false }),
+          );
+          onEvent({ type: "done", text, sources: [], cached: false });
         } else {
-          this.handleEngineEvent(inflight, { type: "done", text: OFF_TOPIC_REPLY, sources: [], cached: false });
+          onEvent({ type: "done", text: OFF_TOPIC_REPLY, sources: [], cached: false });
         }
-      },
-      () =>
-        this.handleEngineEvent(inflight, {
-          type: "error",
-          message: "Your question couldn't be checked right now. Please try again.",
-        }),
-    );
+      })
+      .catch(() => onEvent({ type: "error", message: "Your message couldn't be answered right now. Please try again." }));
+  }
+
+  /** The conversation before the question that `messageId` answers, as context. */
+  private historyBefore(messageId: string): Turn[] {
+    const key = this.findSessionKey(messageId);
+    const messages = key ? this.state.sessions[key].messages : [];
+    const answerAt = messages.findIndex((m) => m.id === messageId);
+    return messages
+      .slice(0, Math.max(0, answerAt - 1))
+      .filter((m) => m.content.trim() && m.status !== "error")
+      .slice(-HISTORY_TURNS)
+      .map(({ role, content }) => ({ role, content }));
   }
 
   private handleEngineEvent(inflight: Inflight, event: EngineEvent) {

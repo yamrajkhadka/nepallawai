@@ -21,14 +21,15 @@ export type ParsedAnswer = {
   body: string;
 };
 
-const LEAD = /^according to (?:the )?law\s*:/i;
-const LEAD_TEXT = "according to law:";
+const LEAD = /^(?:according to|under) (?:the )?law\s*:/i;
+/** The model has written both forms. */
+const LEAD_TEXTS = ["according to law:", "under law:"];
 const KEYED_PART = /,\s*(?=(?:chapter|part|section|article|rule|clause|schedule)\s*:)/i;
 
 export function parseAnswer(text: string, complete: boolean): ParsedAnswer {
   const trimmed = text.trimStart();
 
-  if (!complete && trimmed.length > 0 && LEAD_TEXT.startsWith(trimmed.toLowerCase())) {
+  if (!complete && trimmed.length > 0 && LEAD_TEXTS.some((lead) => lead.startsWith(trimmed.toLowerCase()))) {
     return { citation: null, citationPending: true, body: "" };
   }
   if (!LEAD.test(trimmed)) {
